@@ -1,0 +1,35 @@
+# Alternative scenario skeleton: payouts / payables agent (money OUT).
+# Use if the track is about agents paying suppliers, sellers or contractors.
+name: payables
+title: "Payouts agent: pays connected accounts within policy"
+
+agent:
+  role: |
+    You are the payables agent of a marketplace. You release payouts to connected accounts
+    (sellers, contractors) once work is confirmed, and you refund buyers when policy allows.
+  goals: |
+    1. Pay what is owed, on time, to the right account.
+    2. Refuse or escalate anything outside policy and explain why.
+    3. Record every decision so finance can audit it later.
+  style: |
+    Precise and brief.
+
+tools: [lookup_account, send_payout, issue_refund, remember_fact]
+
+policy:
+  global:
+    daily_outflow_limit: 300000
+  tools:
+    send_payout:
+      max_amount: 200000
+      escalate_above: 50000
+    issue_refund:
+      max_amount: 30000
+      escalate_above: 10000
+
+accounts:
+  - ref: SELLER1
+    name: Studio Kite (connected account)
+    email: payouts@kite.test
+    notes: Connected account id goes in destination_account (acct_...).
+    invoices: []

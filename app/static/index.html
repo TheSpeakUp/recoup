@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recoup</title>
+<style>
+  :root{--bg:#fbfaf7;--fg:#141414;--mute:#77746d;--line:#e3e0d8;--ok:#1d7a4b;--no:#b42318;--esc:#a85a06;--skip:#5b5bd6;--acc:#2f2fc4;--hi:#fff6d6}
+  @media (prefers-color-scheme:dark){:root{--bg:#111110;--fg:#ecebe8;--mute:#8f8c85;--line:#2a2927;--ok:#4cc38a;--no:#ff6b5e;--esc:#f0a54a;--skip:#9b9bff;--acc:#9b9bff;--hi:#2a2614}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14.5px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Inter,system-ui,sans-serif}
+  header{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:baseline;padding:22px 28px 14px}
+  h1{font-size:24px;font-weight:650;margin:0;letter-spacing:-.02em}
+  .tag{color:var(--mute)}
+  .mute{color:var(--mute)} .small{font-size:12.5px} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  .kpis{display:flex;flex-wrap:wrap;gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:0 28px}
+  .kpi{padding:12px 28px 12px 0;margin-right:28px;border-right:1px solid var(--line)}
+  .kpi:last-child{border-right:0}
+  .kpi .v{font-size:24px;font-weight:620;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .kpi .l{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute)}
+  .grid{display:grid;grid-template-columns:minmax(330px,1.15fr) minmax(320px,1fr) minmax(320px,1fr)}
+  section{padding:18px 28px;border-right:1px solid var(--line);height:calc(100vh - 150px);overflow-y:auto}
+  section:last-child{border-right:0}
+  h2{font-size:11.5px;font-weight:650;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin:0 0 10px;display:flex;gap:10px;align-items:center}
+  select,input,button{font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px solid var(--line);padding:5px 2px}
+  button{cursor:pointer;border:1px solid var(--fg);border-radius:999px;padding:5px 13px}
+  button.primary{background:var(--fg);color:var(--bg)}
+  button.ghost{border-color:var(--line);color:var(--mute)}
+  table{width:100%;border-collapse:collapse} td,th{padding:7px 10px 7px 0;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
+  th{font-size:11px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+  tr.f{cursor:pointer} tr.f:hover td{background:var(--hi)} tr.sel td{background:var(--hi)}
+  .st{font-weight:650;text-transform:uppercase;font-size:11px;letter-spacing:.06em}
+  .billed,.paid,.executed,.allow,.approved_by_human,.observed{color:var(--ok)} .blocked,.deny,.rejected_by_human{color:var(--no)}
+  .escalated,.escalate{color:var(--esc)} .skipped{color:var(--skip)} .found{color:var(--mute)}
+  .why{margin-top:14px;padding-top:4px}
+  .why .q{font-size:15px;font-weight:600;margin:6px 0}
+  .why dl{margin:0;display:grid;grid-template-columns:96px 1fr;gap:6px 12px} .why dt{color:var(--mute);font-size:12px;padding-top:1px} .why dd{margin:0}
+  .why ul{margin:0;padding-left:16px}
+  .msg{padding:9px 0;border-bottom:1px solid var(--line)}
+  .msg .who{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.07em}
+  .msg.tool{color:var(--mute);font-size:12.5px;padding:4px 0}
+  .msg a{color:var(--acc);word-break:break-all}
+  .compose{display:flex;gap:10px;margin-top:12px} .compose input{flex:1}
+  .row{padding:8px 0;border-bottom:1px solid var(--line)}
+  .row .rs{font-size:12.5px;color:var(--mute);margin-top:2px}
+  .row.new{animation:flash 1.6s ease-out}
+  @keyframes flash{from{background:var(--hi)}to{background:transparent}}
+  .appr{padding:10px 0;border-bottom:1px solid var(--line)} .appr button{margin:6px 8px 0 0}
+  .clauses div{padding:3px 0;font-size:12.5px} .clauses b{display:inline-block;width:28px}
+  .foot{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+  @media (max-width:980px){.grid{grid-template-columns:1fr}section{border-right:0;border-bottom:1px solid var(--line);height:auto;padding:16px}header,.kpis{padding-left:16px;padding-right:16px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Recoup</h1>
+  <span class="tag">finds revenue you forgot to bill, bills it in Stripe and gets it paid, within finance policy</span>
+  <span id="mode" class="mono mute"></span>
+  <span id="chain" class="mono"></span>
+</header>
+<div class="kpis" id="kpis"></div>
+<div class="grid">
+  <section>
+    <h2>Findings <button class="primary" id="audit">Run audit</button></h2>
+    <table id="findings"><tr><td class="mute small">Run the audit to compare contracts, usage logs and Stripe billing.</td></tr></table>
+    <div class="why" id="why"></div>
+  </section>
+  <section>
+    <h2>Conversation</h2>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+      <select id="acct"></select><button id="start">Contact customer</button>
+    </div>
+    <div id="chat"></div>
+    <div class="compose"><input id="text" placeholder="Reply as the customer…" autocomplete="off"><button id="send">Send</button></div>
+  </section>
+  <section>
+    <h2>Decisions <span class="small" style="text-transform:none;letter-spacing:0">policy gate · hash-chained audit</span></h2>
+    <div id="approvals"></div>
+    <div id="audit_rows"></div>
+    <h2 style="margin-top:22px">Books <span class="small" style="text-transform:none;letter-spacing:0">double-entry</span></h2>
+    <table id="bal"></table>
+    <p id="balanced" class="small mute" style="margin:6px 0 0"></p>
+    <h2 style="margin-top:22px">Finance policy</h2>
+    <div class="clauses" id="clauses"></div>
+    <div class="foot">
+      <button class="ghost" id="tamper">Tamper with log</button>
+      <button class="ghost" id="reset">Reset</button>
+    </div>
+  </section>
+</div>
+<script>
+const gbp = p => (p<0?"-":"")+"£"+(Math.abs(p||0)/100).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const linkify = s => esc(s).replace(/(https?:\/\/[^\s)]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+const TYPE = {unbilled_overage:"Unbilled usage",expired_discount:"Expired discount still applied",extra_seats:"Unbilled seats"};
+const STATUS = {found:"found",billed:"billed",escalated:"needs approval",skipped:"skipped: waiver",blocked:"blocked",paid:"paid"};
+let session=null, accounts=[], selected=null, seen=0, transcript=[];
+async function api(path,body){const r=await fetch(path,{method:body===undefined?"GET":"POST",headers:{"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});return r.json()}
+function renderChat(t){transcript=t;setTimeout(()=>{const c=document.getElementById("chat").parentElement;c.scrollTop=c.scrollHeight},30);document.getElementById("chat").innerHTML=t.filter(m=>!(m.text||"").startsWith("[Open")).map(m=>m.role==="tool"
+  ?`<div class="msg tool">→ ${esc(m.text)}</div>`
+  :`<div class="msg"><div class="who">${m.role==="agent"?"Recoup":m.role==="system"?"System":"Customer"}</div>${linkify(m.text)}</div>`).join("")}
+function kpi(v,l){return `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`}
+async function showWhy(id){
+  selected=id;const r=await api(`/api/explain/${id}`);if(r.status!=="ok")return;const f=r.result;
+  const dec=f.decisions.filter(d=>d.tool!=="explain_finding").map(d=>`<li><span class="st ${d.event}">${esc(d.event)}</span> ${esc(d.tool)} <span class="mute">#${d.seq} · ${esc(d.actor)}</span><div class="small mute">${esc((d.reasons||[]).filter(x=>!x.startsWith("Evidence")).join(" "))}</div></li>`).join("");
+  document.getElementById("why").innerHTML=`<h2>Why ${gbp(f.amount)}?</h2>
+   <div class="q">${esc(f.customer)}: ${esc(TYPE[f.type]||f.type)}</div>
+   <dl><dt>Contract</dt><dd>${esc(f.contract)}, clause ${esc(f.clause)}: “${esc(f.clause_text)}”</dd>
+   <dt>Records</dt><dd><ul>${f.evidence.map(e=>`<li class="mono">${esc(e)}</li>`).join("")}</ul></dd>
+   <dt>Calculation</dt><dd>${esc(f.calculation)} = <b>${gbp(f.amount)}</b></dd>
+   <dt>Memory</dt><dd><ul>${f.memory.map(m=>`<li>${esc(m)}</li>`).join("")}</ul></dd>
+   <dt>Decisions</dt><dd><ul>${dec||"<li class='mute'>none yet</li>"}</ul></dd></dl>`;
+  refresh();
+}
+async function refresh(){
+  const s=await api("/api/state");
+  document.getElementById("mode").textContent=`stripe: ${s.mode.payments} · agent: ${s.mode.llm} · memory: ${s.mode.memory}`;
+  const c=document.getElementById("chain");
+  c.innerHTML=s.chain.ok?`<span class="executed">● audit chain intact</span> <span class="mute">${s.chain.checked} entries</span>`
+                        :`<span class="deny">● audit chain BROKEN at entry #${s.chain.broken_at_seq}</span>`;
+  const F=s.findings||[];const sum=st=>F.filter(f=>st.includes(f.status)).reduce((a,f)=>a+f.amount,0);
+  const cash=(s.balances.accounts["Cash at Stripe"]||0);
+  document.getElementById("kpis").innerHTML=kpi(gbp(F.reduce((a,f)=>a+f.amount,0)),"Found, never billed")+kpi(gbp(sum(["billed","paid"])),"Billed in Stripe")
+    +kpi(gbp(sum(["escalated"])),"Waiting for a human")+kpi(gbp(sum(["skipped","blocked"])),"Not billed, by policy or memory")+kpi(gbp(cash),"Cash received");
+  if(F.length)document.getElementById("findings").innerHTML=`<tr><th>Customer</th><th>Leak</th><th class="n">Amount</th><th>Status</th></tr>`+F.map(f=>`<tr class="f ${selected===f.id?"sel":""}" onclick="showWhy('${f.id}')">
+    <td>${esc(f.customer)}</td><td class="small">${esc(TYPE[f.type]||f.type)}<div class="mute">cl. ${esc(f.clause)} · ${esc(f.calculation)}</div></td>
+    <td class="n">${gbp(f.amount)}</td><td><span class="st ${f.status}">${esc(STATUS[f.status]||f.status)}</span></td></tr>`).join("");
+  if(!accounts.length&&s.accounts.length){accounts=s.accounts;document.getElementById("acct").innerHTML=accounts.map(a=>`<option value="${a.ref}" ${a.ref==="BLUEBIRD"?"selected":""}>${esc(a.name)}</option>`).join("")}
+  document.getElementById("approvals").innerHTML=s.approvals.map(a=>`<div class="appr"><span class="st escalate">Needs your approval</span>
+    <div>${esc(a.tool)} ${esc(a.args.finding_id||"")}</div><div class="small mute">${esc(a.reasons.filter(x=>!x.startsWith("Evidence")).join(" "))}</div>
+    <button onclick="act('${a.id}','approve')">Approve</button><button class="ghost" onclick="act('${a.id}','reject')">Reject</button></div>`).join("");
+  const rows=s.audit.filter(r=>!["lookup_account","explain_finding","recall_customer_memory","scan_leakage"].includes(r.tool)||r.event!=="executed").slice(0,18);
+  const maxSeq=s.audit.length?s.audit[0].seq:0;
+  document.getElementById("audit_rows").innerHTML=rows.map(r=>`<div class="row ${r.seq>seen?"new":""}">
+    <div><span class="st ${r.decision||r.event}">${esc(r.event==="executed"?(r.decision==="approved_by_human"?"approved":"allow"):r.event)}</span> <span class="mono">${esc(r.tool||"")}</span>
+      ${r.amount?`<b> ${gbp(r.amount)}</b>`:""} <span class="small mute">#${r.seq} · ${esc(r.actor)}</span></div>
+    <div class="rs">${esc((r.reasons||[]).filter(x=>!x.startsWith("Evidence")&&x!=="Within policy.").join(" "))}</div>
+    ${r.rationale?`<div class="small">${esc(r.rationale)}</div>`:""}</div>`).join("");
+  seen=maxSeq;
+  document.getElementById("bal").innerHTML=Object.entries(s.balances.accounts).map(([a,v])=>`<tr><td>${esc(a)}</td><td class="n">${gbp(v)}</td></tr>`).join("");
+  document.getElementById("balanced").textContent=Object.keys(s.balances.accounts).length?(s.balances.balanced?"Debits equal credits.":"Ledger out of balance!"):"";
+  document.getElementById("clauses").innerHTML=(s.clauses||[]).map(c=>`<div><b>${esc(c.id)}</b>${esc(c.text)}</div>`).join("");
+}
+async function act(id,a){await api(`/api/approvals/${id}/${a}`,{});if(selected)showWhy(selected);else refresh()}
+document.getElementById("audit").onclick=async e=>{e.target.disabled=true;e.target.textContent="Auditing…";const r=await api("/api/audit",{});renderChat(r.transcript.filter(m=>m.role!=="tool"));e.target.textContent="Run audit";e.target.disabled=false;refresh()};
+document.getElementById("start").onclick=async()=>{const r=await api("/api/session",{account_ref:document.getElementById("acct").value});session=r.session_id;renderChat(r.transcript);refresh()};
+async function send(){const i=document.getElementById("text");if(!session||!i.value.trim())return;const t=i.value;i.value="";
+  renderChat([...transcript,{role:"counterparty",text:t}]);const r=await api("/api/message",{session_id:session,text:t});renderChat(r.transcript);refresh()}
+document.getElementById("send").onclick=send;document.getElementById("text").onkeydown=e=>{if(e.key==="Enter")send()};
+document.getElementById("tamper").onclick=async()=>{await api("/api/demo/tamper",{});refresh()};
+document.getElementById("reset").onclick=async()=>{await api("/api/reset",{});session=null;accounts=[];selected=null;document.getElementById("chat").innerHTML="";document.getElementById("why").innerHTML="";location.reload()};
+refresh();setInterval(refresh,2500);
+</script>
+</body>
+</html>

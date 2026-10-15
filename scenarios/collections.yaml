@@ -1,0 +1,49 @@
+# Scenario: autonomous collections negotiator (accounts receivable).
+# Swap this file (SCENARIO=...) or edit it after the track briefing.
+name: collections
+title: "Collections agent: recovers overdue invoices within policy"
+
+agent:
+  role: |
+    You are the accounts-receivable agent of Northwind Studio Ltd, a UK design agency.
+    You recover overdue invoices from business customers politely and autonomously.
+  goals: |
+    1. Get the overdue invoice paid, ideally in full today.
+    2. If the customer has a cash-flow problem, agree an instalment plan within policy.
+    3. A small settlement discount is allowed only in exchange for paying today.
+    4. Never threaten, never invent fees, never pressure. Escalate disputes about the work itself to a human.
+  style: |
+    Warm, brief, professional British English. One clear next step per message.
+
+# Which gateway tools this scenario exposes to the LLM
+tools: [lookup_account, create_payment_link, offer_discount, create_instalment_plan, charge_saved_card, remember_fact]
+
+policy:
+  global:
+    daily_outflow_limit: 50000        # £500/day of discounts, refunds or payouts across all customers
+  tools:
+    offer_discount:
+      max_percent: 5
+      escalate_above: 30000           # discount worth more than £300 needs a human
+    create_instalment_plan:
+      max_instalments: 3
+      max_interval_days: 31
+    charge_saved_card:
+      max_amount: 500000              # £5,000
+      escalate_above: 250000          # above £2,500 needs a human
+    create_payment_link:
+      max_amount: 1000000
+
+accounts:
+  - ref: ACME
+    name: Acme Robotics Ltd
+    email: accounts@acme-robotics.test
+    notes: Usually pays late but always pays. Finance contact is Priya.
+    invoices:
+      - {number: INV-1042, amount: 480000, overdue_days: 34}
+  - ref: BLUEBIRD
+    name: Bluebird Coffee
+    email: hello@bluebird.test
+    notes: New customer, first invoice.
+    invoices:
+      - {number: INV-1057, amount: 129000, overdue_days: 12}

@@ -1,0 +1,179 @@
+# Scenario: Recoup, a revenue recovery agent.
+# It reads contracts, usage logs and what Stripe actually billed, finds money that was never billed,
+# bills it in Stripe within policy, and then collects it. Customer memory (Cognee) holds the
+# commitments that live outside the billing system, such as waivers promised by sales.
+name: recovery
+title: "Recoup: finds revenue you forgot to bill, bills it and gets it paid"
+recovery: true
+today: "2026-10-15"
+company: Northwind Cloud Ltd
+
+agent:
+  role: |
+    You are Recoup, the revenue recovery agent of Northwind Cloud Ltd, a UK API platform.
+    You find revenue that the contracts entitle us to but that was never billed, bill it in Stripe,
+    and then collect it from business customers politely.
+  goals: |
+    1. In an audit: call scan_leakage once, then for every finding call recall_customer_memory for that
+       customer, then decide: bill_leakage, or skip_finding with a reason (cite the memory or clause).
+    2. Never bill against a written commitment the customer was given (waivers, promises).
+    3. In a conversation with a customer: explain the bill with the contract clause and the usage record,
+       share the payment link, and if cash is tight agree a plan within policy. If the customer needs more
+       instalments than policy allows us to carry, ask our financing partners for an offer: the partner pays
+       us today, the customer repays the partner monthly at no extra cost to them; we pay the fee.
+    4. Never threaten, never invent fees, never pressure. Remember any promise the customer makes.
+  style: |
+    Warm, brief, professional British English. One clear next step per message.
+  opening: "[Open the conversation: the customer has just received the corrective invoice for the finding.]"
+
+tools: [scan_leakage, recall_customer_memory, bill_leakage, skip_finding, explain_finding, lookup_account,
+        create_payment_link, offer_discount, create_instalment_plan, request_financing_offer, accept_financing,
+        charge_saved_card, remember_fact]
+
+policy:
+  clauses:
+    - {id: R1, text: "Bill only what a signed contract clause and a usage or billing record both support."}
+    - {id: R2, text: "Up to £500 per finding is billed automatically; anything above needs a human."}
+    - {id: R3, text: "Never bill a customer who has an open dispute with us."}
+    - {id: R4, text: "Never back-bill anything older than 90 days."}
+    - {id: R5, text: "A written commitment to the customer (a waiver or promise) overrides the contract until it expires."}
+    - {id: C1, text: "A settlement discount is at most 5% and only for paying today."}
+    - {id: C2, text: "A payment plan has at most 3 instalments, at most 31 days apart."}
+    - {id: C3, text: "Card charges above £250 need a human; nothing above £5,000."}
+    - {id: F1, text: "Partner financing: only approved partners, the fee we pay is at most 4%, up to £2,500 automatic, above that a human approves."}
+    - {id: G1, text: "Discounts and refunds are capped at £300 per day in total."}
+  global:
+    daily_outflow_limit: 30000
+  tools:
+    bill_leakage:
+      clause: "R1 Bill only what a signed contract clause and a usage or billing record both support."
+      require_evidence: true
+      escalate_above: 50000
+      max_age_days: 90
+      deny_if:
+        dispute_open: "Customer has an open dispute."
+        waived_in_memory: "A written commitment in customer memory waives this charge:"
+      rule_clauses: {escalate_above: R2, dispute_open: R3, max_age_days: R4, waived_in_memory: R5}
+    offer_discount:
+      clause: "C1 A settlement discount is at most 5% and only for paying today."
+      max_percent: 5
+    create_instalment_plan:
+      clause: "C2 A payment plan has at most 3 instalments, at most 31 days apart."
+      max_instalments: 3
+      max_interval_days: 31
+    charge_saved_card:
+      clause: "C3 Card charges above £250 need a human; nothing above £5,000."
+      max_amount: 500000
+      escalate_above: 25000
+    create_payment_link:
+      max_amount: 500000
+    accept_financing:
+      clause: "F1 Partner financing: only approved partners, the fee we pay is at most 4%, up to £2,500 automatic, above that a human approves."
+      require_evidence: true
+      max_percent: 4
+      escalate_above: 250000
+      allowed_values: {partner: ["Northwind Capital", "Ledgerline Finance"]}
+
+financing_partners:
+  - name: Ledgerline Finance
+    max_amount: 1000000
+    fee_percent_by_months: {3: 2.0, 6: 3.5, 12: 6.0}
+    underwriting: "Instant decision from Companies House filings and payment history."
+  - name: Northwind Capital
+    max_amount: 500000
+    fee_percent_by_months: {6: 3.0, 12: 5.5}
+    underwriting: "Instant decision from open banking data."
+
+accounts:
+  - ref: ACME
+    name: Acme Robotics Ltd
+    email: ap@acme-robotics.test
+    notes: Pays within 14 days. Finance contact is Priya.
+    contract:
+      id: MSA-ACME-2026
+      clauses:
+        "2.1": "Growth plan: £800 per month, including 10,000 API calls per month."
+        "4.2": "API calls above the monthly allowance are billed at £0.05 per call, monthly in arrears."
+      terms: {plan_fee: 80000, included_calls: 10000, overage_per_call: 5, overage_clause: "4.2"}
+    billed:
+      - {period: "2026-09", invoice: "INV-1101", items: [{desc: "Growth plan", amount: 80000}]}
+    usage:
+      - {period: "2026-09", api_calls: 11240, seats: 4, source: "usage-logs/acme/2026-09.jsonl"}
+    memory:
+      - "2026-07-03: Priya (Acme finance) asked for all invoices to go to ap@acme-robotics.test."
+      - "2026-08-20: Acme paid INV-1033 on time, 9 days after issue."
+
+  - ref: BLUEBIRD
+    name: Bluebird Coffee
+    email: hello@bluebird.test
+    notes: Small team, cash is tight in autumn.
+    contract:
+      id: MSA-BLUE-2026
+      clauses:
+        "2.1": "Starter plan: £450 per month."
+        "3.1": "Launch discount: 20% off the plan fee for June, July and August 2026 only."
+      terms: {plan_fee: 45000, discount_percent: 20, discount_until: "2026-08-31", discount_clause: "3.1"}
+    billed:
+      - {period: "2026-09", invoice: "INV-1102", items: [{desc: "Starter plan", amount: 45000}, {desc: "Launch discount 20%", amount: -9000}]}
+      - {period: "2026-10", invoice: "INV-1131", items: [{desc: "Starter plan", amount: 45000}, {desc: "Launch discount 20%", amount: -9000}]}
+    usage:
+      - {period: "2026-09", api_calls: 2100, seats: 2, source: "usage-logs/bluebird/2026-09.jsonl"}
+    memory:
+      - "2026-08-14: Bluebird paid INV-1040 twelve days late and said autumn cash flow is tight."
+
+  - ref: COBALT
+    name: Cobalt Health Ltd
+    email: finance@cobalt-health.test
+    notes: Enterprise customer, seat-based.
+    contract:
+      id: MSA-COB-2026
+      clauses:
+        "2.1": "Team plan: 10 seats included in the platform fee."
+        "2.3": "Each additional active seat is billed at £100 per month."
+      terms: {seats_included: 10, seat_price: 10000, seat_clause: "2.3"}
+    billed:
+      - {period: "2026-09", invoice: "INV-1103", items: [{desc: "Team plan, 10 seats", amount: 300000}]}
+      - {period: "2026-10", invoice: "INV-1132", items: [{desc: "Team plan, 10 seats", amount: 300000}]}
+    usage:
+      - {period: "2026-09", api_calls: 54000, seats: 16, source: "usage-logs/cobalt/2026-09.jsonl"}
+      - {period: "2026-10", api_calls: 31000, seats: 16, source: "usage-logs/cobalt/2026-10.jsonl"}
+    memory:
+      - "2026-09-10: Cobalt onboarded 6 clinicians from their new Leeds site."
+
+  - ref: DELTA
+    name: Delta Freight plc
+    email: accounts@delta-freight.test
+    notes: Migrating its tracking system to our API.
+    contract:
+      id: MSA-DEL-2026
+      clauses:
+        "2.1": "Growth plan: £800 per month, including 10,000 API calls per month."
+        "4.2": "API calls above the monthly allowance are billed at £0.05 per call, monthly in arrears."
+      terms: {plan_fee: 80000, included_calls: 10000, overage_per_call: 5, overage_clause: "4.2"}
+    billed:
+      - {period: "2026-09", invoice: "INV-1104", items: [{desc: "Growth plan", amount: 80000}]}
+    usage:
+      - {period: "2026-09", api_calls: 13000, seats: 5, source: "usage-logs/delta/2026-09.jsonl"}
+    memory:
+      - "2026-09-02: Tom Hale (Account Executive) emailed Delta: API overage charges are waived until 30 Nov 2026 while Delta migrates its tracking system."
+    waivers:
+      - {type: overage, until: "2026-11-30", memory_index: 0}
+
+  - ref: ECHO
+    name: Echo Media Ltd
+    email: billing@echo-media.test
+    notes: Disputed the August invoice.
+    contract:
+      id: MSA-ECHO-2026
+      clauses:
+        "2.1": "Growth plan: £800 per month, including 10,000 API calls per month."
+        "4.2": "API calls above the monthly allowance are billed at £0.05 per call, monthly in arrears."
+      terms: {plan_fee: 80000, included_calls: 10000, overage_per_call: 5, overage_clause: "4.2"}
+    billed:
+      - {period: "2026-09", invoice: "INV-1105", items: [{desc: "Growth plan", amount: 80000}]}
+    usage:
+      - {period: "2026-09", api_calls: 14800, seats: 3, source: "usage-logs/echo/2026-09.jsonl"}
+    disputes:
+      - {invoice: "INV-0871", opened: "2026-09-28", status: open, reason: "Says August outage made the service unusable."}
+    memory:
+      - "2026-09-28: Echo Media opened a dispute on INV-0871, saying the August outage made the service unusable."
